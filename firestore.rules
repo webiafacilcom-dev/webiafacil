@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitive Definitions
+    function isSignedIn() { return request.auth != null; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
+    // Identity Guard: Ensures user is verified if app mandates it
+    // For this app, we'll allow standard signed in for now, but following best practices:
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+
+    // Phase 4: Entity Validations (The Blueprints)
+    function isValidUser(data) {
+      let requiredFields = ['email', 'createdAt'];
+      let optionalFields = ['plan'];
+      let allFields = requiredFields.concat(optionalFields);
+      return data.keys().hasAll(requiredFields) &&
+             data.keys().size() >= 2 && data.keys().size() <= 3 &&
+             data.email is string && data.email.size() <= 200 &&
+             data.createdAt is timestamp &&
+             (data.keys().hasAny(['plan']) ? (data.plan is string && data.plan in ['free', 'basico', 'pro', 'master']) : true);
+    }
+
+    function isValidWaLink(data) {
+      return data.keys().hasAll(['phone', 'url', 'createdAt']) &&
+             data.keys().size() >= 3 && data.keys().size() <= 4 &&
+             data.phone is string && data.phone.size() <= 50 &&
+             data.url is string && data.url.size() <= 1000 &&
+             data.createdAt is timestamp &&
+             (data.keys().hasAny(['message']) ? (data.message is string && data.message.size() <= 2000) : true);
+    }
+    
+    function isValidWebsite(data) {
+      return data.keys().hasAll(['prompt', 'status', 'createdAt']) &&
+             data.keys().size() == 3 &&
+             data.prompt is string && data.prompt.size() <= 10000 &&
+             data.status is string && data.status.size() <= 50 &&
+             data.createdAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      
+      // We block 'list' on users for privacy (PII isolation)
+      allow list: if false;
+
+      allow create: if isOwner(userId) && 
+                       isValidId(userId) && 
+                       isValidUser(incoming()) &&
+                       incoming().createdAt == request.time &&
+                       incoming().email == request.auth.token.email;
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUser(incoming()) &&
+                       // Immutable fields
+                       incoming().email == existing().email &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         // Action: Update Plan
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['plan'])) ||
+                         // Action: Update Email (should probably be blocked but allowed if same)
+                         (incoming().diff(existing()).affectedKeys().size() == 0)
+                       );
+
+      // Subcollections
+      match /whatsapp_links/{linkId} {
+        allow read, list: if isOwner(userId);
+        allow create: if isOwner(userId) && 
+                         isValidId(linkId) &&
+                         isValidWaLink(incoming()) &&
+                         incoming().createdAt == request.time;
+        allow update: if isOwner(userId) &&
+                         isValidId(linkId) &&
+                         isValidWaLink(incoming()) &&
+                         // Immutable createdAt
+                         incoming().createdAt == existing().createdAt;
+        allow delete: if isOwner(userId);
+      }
+
+      match /websites/{siteId} {
+        allow read, list: if isOwner(userId);
+        allow create: if isOwner(userId) && 
+                         isValidId(siteId) &&
+                         isValidWebsite(incoming()) &&
+                         incoming().createdAt == request.time;
+        allow update: if isOwner(userId) &&
+                         isValidId(siteId) &&
+                         isValidWebsite(incoming()) &&
+                         incoming().createdAt == existing().createdAt;
+        allow delete: if isOwner(userId);
+      }
+    }
+    
+    // Temporary allow for connection test
+    match /test/connection {
+      allow get: if true;
+    }
+  }
+}

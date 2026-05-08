@@ -1,0 +1,52 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user profile in the application.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "plan": { "type": "string", "enum": ["free", "basico", "pro", "master"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "WhatsAppLink": {
+      "title": "WhatsAppLink",
+      "description": "Saved WhatsApp shortened/tracked links.",
+      "type": "object",
+      "properties": {
+        "phone": { "type": "string" },
+        "message": { "type": "string" },
+        "url": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["phone", "url", "createdAt"]
+    },
+    "WebsiteProject": {
+      "title": "WebsiteProject",
+      "description": "A generated website project from the AI builder.",
+      "type": "object",
+      "properties": {
+        "prompt": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["prompt", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles."
+    },
+    "users/{userId}/whatsapp_links/{linkId}": {
+      "schema": { "$ref": "#/entities/WhatsAppLink" },
+      "description": "Stores WhatsApp links belonging to the user."
+    },
+    "users/{userId}/websites/{siteId}": {
+      "schema": { "$ref": "#/entities/WebsiteProject" },
+      "description": "Stores generated websites belonging to the user."
+    }
+  }
+}
