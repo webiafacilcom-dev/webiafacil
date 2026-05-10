@@ -7,6 +7,10 @@
       "properties": {
         "email": { "type": "string" },
         "plan": { "type": "string", "enum": ["free", "basico", "pro", "master"] },
+        "whatsapp": { "type": "string" },
+        "activationDate": { "type": "string", "format": "date-time" },
+        "conversionCount": { "type": "number" },
+        "maxConversions": { "type": "number" },
         "hosting": {
           "type": "object",
           "properties": {

@@ -10,7 +10,7 @@ import {
   handleFirestoreError, OperationType 
 } from "./firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, getDocs, updateDoc, increment } from "firebase/firestore";
 import { UploadBox } from "./components/UploadBox";
 import { ProgressSteps } from "./components/ProgressSteps";
 import { DownloadBox } from "./components/DownloadBox";
@@ -26,6 +26,177 @@ interface Job {
   downloadUrl?: string;
 }
 
+function AdminSection({ activeTab }: { activeTab: string }) {
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "users"));
+        const usersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setAllUsers(usersData);
+      } catch (err) {
+        console.error("Error fetching users", err);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+    if (activeTab === "admin") fetchUsers();
+  }, [activeTab]);
+
+  const updateUserFieldValue = async (userId: string, field: string, value: any) => {
+    try {
+      const userRef = doc(db, "users", userId);
+      const updateData: any = {};
+      if (field.includes('.')) {
+        const parts = field.split('.');
+        // @ts-ignore
+        updateData[parts[0]] = { ...allUsers.find(u => u.id === userId)[parts[0]], [parts[1]]: value };
+      } else {
+        updateData[field] = value;
+      }
+      await updateDoc(userRef, updateData);
+      setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updateData } : u));
+    } catch (err) {
+      alert("Error al actualizar usuario");
+    }
+  };
+
+  if (loadingUsers) return <div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div>;
+
+  return (
+    <div className="w-full max-w-6xl mx-auto space-y-8 pb-20">
+      <header className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-black text-gray-900">Panel de Administración</h1>
+          <p className="text-gray-500">Gestiona usuarios, planes y credenciales de hosting.</p>
+        </div>
+        <button onClick={() => window.location.reload()} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition">
+          <RefreshCw className="w-5 h-5" />
+        </button>
+      </header>
+
+      <div className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Usuario / WhatsApp</th>
+              <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Plan / Límite</th>
+              <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Activación</th>
+              <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Hosting (User/Pass)</th>
+              <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">URL Hosting</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {allUsers.map((u) => (
+              <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
+                <td className="p-4">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-gray-900">{u.email}</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <input 
+                        type="text" 
+                        placeholder="WhatsApp"
+                        value={u.whatsapp || ""} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, whatsapp: val } : usr));
+                        }}
+                        onBlur={(e) => updateUserFieldValue(u.id, "whatsapp", e.target.value)}
+                        className="text-xs bg-gray-100 border-none rounded px-2 py-1 w-32 focus:ring-1 focus:ring-blue-500"
+                      />
+                      {u.whatsapp && (
+                        <a href={`https://wa.me/${u.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-emerald-500 hover:text-emerald-600">
+                          <MessageCircle className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </td>
+                <td className="p-4">
+                  <div className="flex flex-col gap-2">
+                    <select 
+                      value={u.plan || "free"} 
+                      onChange={(e) => updateUserFieldValue(u.id, "plan", e.target.value)}
+                      className="text-xs font-bold bg-blue-50 text-blue-700 border-none rounded px-2 py-1 uppercase"
+                    >
+                      <option value="free">Free</option>
+                      <option value="basico">Basico</option>
+                      <option value="pro">Pro</option>
+                      <option value="master">Master</option>
+                    </select>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-gray-400 uppercase font-black">Límite:</span>
+                      <input 
+                        type="number" 
+                        value={u.maxConversions || 0} 
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, maxConversions: val } : usr));
+                        }}
+                        onBlur={(e) => updateUserFieldValue(u.id, "maxConversions", parseInt(e.target.value))}
+                        className="w-12 text-[10px] bg-gray-100 border-none rounded px-1 py-0.5 text-center font-bold"
+                      />
+                    </div>
+                  </div>
+                </td>
+                <td className="p-4">
+                  <input 
+                    type="date" 
+                    value={u.activationDate ? u.activationDate.split('T')[0] : ""} 
+                    onChange={(e) => updateUserFieldValue(u.id, "activationDate", e.target.value)}
+                    className="text-xs bg-gray-100 border-none rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
+                  />
+                </td>
+                <td className="p-4">
+                  <div className="flex flex-col gap-1">
+                    <input 
+                      type="text" 
+                      placeholder="User"
+                      value={u.hosting?.user || ""} 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), user: val } } : usr));
+                      }}
+                      onBlur={(e) => updateUserFieldValue(u.id, "hosting.user", e.target.value)}
+                      className="text-[10px] bg-gray-100 border-none rounded px-2 py-1 w-24"
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Pass"
+                      value={u.hosting?.pass || ""} 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), pass: val } } : usr));
+                      }}
+                      onBlur={(e) => updateUserFieldValue(u.id, "hosting.pass", e.target.value)}
+                      className="text-[10px] bg-gray-100 border-none rounded px-2 py-1 w-24"
+                    />
+                  </div>
+                </td>
+                <td className="p-4">
+                  <input 
+                    type="text" 
+                    placeholder="URL Hosting"
+                    value={u.hosting?.url || ""} 
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), url: val } } : usr));
+                    }}
+                    onBlur={(e) => updateUserFieldValue(u.id, "hosting.url", e.target.value)}
+                    className="text-[10px] bg-gray-100 border-none rounded px-2 py-1 w-full min-w-[150px]"
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -33,7 +204,7 @@ export default function App() {
   const [viewState, setViewState] = useState<"landing" | "auth" | "dashboard">("landing");
 
   // Layout State
-  const [activeTab, setActiveTab] = useState<"tutoriales" | "prompt-generator" | "converter" | "free-hosting" | "hosting" | "marketplace" | "afiliados">("prompt-generator");
+  const [activeTab, setActiveTab] = useState<"tutoriales" | "prompt-generator" | "converter" | "free-hosting" | "hosting" | "marketplace" | "afiliados" | "admin">("prompt-generator");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // --- Prompt Generator State ---
@@ -42,8 +213,13 @@ export default function App() {
 
   // --- User Profile State ---
   const [userProfile, setUserProfile] = useState<{ 
-    plan: string, 
-    hosting?: { url: string; user: string; pass: string } 
+    plan: string;
+    hosting?: { url: string; user: string; pass: string };
+    isAdmin?: boolean;
+    conversionCount?: number;
+    maxConversions?: number;
+    activationDate?: string;
+    whatsapp?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -60,9 +236,32 @@ export default function App() {
            const docRef = doc(db, "users", currentUser.uid);
            const docSnap = await getDoc(docRef);
            if (docSnap.exists()) {
-             setUserProfile({ plan: docSnap.data().plan || "free" });
+             const data = docSnap.data();
+             setUserProfile({ 
+               plan: data.plan || "free",
+               hosting: data.hosting,
+               isAdmin: currentUser.email === "webiafacil.com@gmail.com",
+               conversionCount: data.conversionCount || 0,
+               maxConversions: data.maxConversions || (data.plan === 'pro' ? 25 : data.plan === 'basico' ? 10 : data.plan === 'master' ? 50 : 1),
+               activationDate: data.activationDate,
+               whatsapp: data.whatsapp
+             });
            } else {
-             setUserProfile({ plan: "free" });
+             const defaultProfile = { 
+               plan: "free",
+               isAdmin: currentUser.email === "webiafacil.com@gmail.com",
+               conversionCount: 0,
+               maxConversions: 1
+             };
+             setUserProfile(defaultProfile);
+             // Auto-create profile if missing
+             await setDoc(docRef, { 
+               email: currentUser.email, 
+               plan: "free", 
+               createdAt: new Date(),
+               conversionCount: 0,
+               maxConversions: 1
+             });
            }
          } catch (e) {
            handleFirestoreError(e, OperationType.GET, path);
@@ -238,6 +437,9 @@ export default function App() {
 
   const startConversion = async () => {
     if (!file) return;
+    if (userProfile && userProfile.conversionCount! >= userProfile.maxConversions!) {
+      return; // Handled by block UI
+    }
     setUploadError(null);
     const formData = new FormData();
     formData.append("projectZip", file);
@@ -254,6 +456,19 @@ export default function App() {
       }
       const data = await res.json();
       setJobId(data.jobId);
+
+      // Increment conversion count after successful upload
+      if (user) {
+        try {
+          const userRef = doc(db, "users", user.uid);
+          await updateDoc(userRef, {
+            conversionCount: increment(1)
+          });
+          setUserProfile(prev => prev ? { ...prev, conversionCount: (prev.conversionCount || 0) + 1 } : null);
+        } catch (err) {
+          console.error("Error incrementing conversion", err);
+        }
+      }
     } catch (err: any) {
       setUploadError(err.message || "Uh oh! Hubo un problema al subir el archivo.");
     }
@@ -267,7 +482,11 @@ export default function App() {
     );
   }
 
-  const handleGeneratePrompt = () => {
+  const handleGeneratePrompt = async () => {
+    if (userProfile && userProfile.conversionCount! >= userProfile.maxConversions!) {
+      return; // Handled by block UI
+    }
+
     const template = `Actúa como un experto senior en creación de sitios web, marketing digital, copywriting persuasivo, diseño UX/UI, SEO local y estrategia comercial para pequeñas y medianas empresas.
 
 Voy a pegarte una reseña o descripción básica de una empresa. Tu trabajo es transformar esa información en una página web profesional, moderna, clara, persuasiva y orientada a generar contactos, ventas y confianza.
@@ -366,6 +585,19 @@ Quiero que me entregues:
 8. Código HTML completo en un solo archivo, listo para copiar, guardar como index.html y subir a un hosting o cPanel`;
     
     setGeneratedPrompt(template);
+    
+    // Increment conversion count
+    if (user) {
+      try {
+        const userRef = doc(db, "users", user.uid);
+        await updateDoc(userRef, {
+          conversionCount: increment(1)
+        });
+        setUserProfile(prev => prev ? { ...prev, conversionCount: (prev.conversionCount || 0) + 1 } : null);
+      } catch (err) {
+        console.error("Error incrementing conversion", err);
+      }
+    }
   };
 
   const copyPrompt = () => {
@@ -1371,6 +1603,15 @@ Quiero que me entregues:
                   <Users className={`w-5 h-5 ${activeTab === "afiliados" ? "text-blue-600" : "text-gray-400"}`} />
                   Afiliados <span className="ml-auto text-[10px] bg-gray-100 text-gray-500 py-0.5 px-2 rounded-full font-bold">Pronto</span>
                 </button>
+                {userProfile?.isAdmin && (
+                  <button 
+                    onClick={() => { setActiveTab("admin"); setIsMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-colors ${activeTab === "admin" ? "bg-purple-50 text-purple-700" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"}`}
+                  >
+                    <ShieldCheck className={`w-5 h-5 ${activeTab === "admin" ? "text-purple-600" : "text-gray-400"}`} />
+                    Administración
+                  </button>
+                )}
               </nav>
             </div>
 
@@ -1414,6 +1655,35 @@ Quiero que me entregues:
 
         {/* Main Content Area */}
         <main className="flex-1 flex flex-col items-center p-4 lg:p-8 overflow-y-auto w-full relative">
+          
+          {/* Conversion Limit Block Overlay */}
+          {userProfile && userProfile.conversionCount! >= userProfile.maxConversions! && !userProfile.isAdmin && (
+            <div className="absolute inset-0 z-30 bg-white/95 backdrop-blur-sm flex items-center justify-center p-6 text-center animate-in fade-in duration-500">
+               <div className="max-w-md space-y-6">
+                 <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto shadow-sm">
+                   <AlertTriangle className="w-10 h-10" />
+                 </div>
+                 <div className="space-y-2">
+                   <h2 className="text-3xl font-black text-gray-900 leading-tight">Límite de Conversiones Alcanzado</h2>
+                   <p className="text-gray-500 font-medium">Has alcanzado el límite permitido de tu plan <span className="font-bold text-gray-900 uppercase">({userProfile.plan})</span>.</p>
+                 </div>
+                 <div className="p-6 bg-gray-50 rounded-[32px] border border-gray-100 text-left space-y-4">
+                   <p className="text-sm text-gray-600 leading-relaxed font-medium">
+                     Para seguir generando proyectos o prompts, por favor contacta a nuestro equipo de soporte para ampliar tu límite o mejorar tu plan.
+                   </p>
+                   <a 
+                     href="https://wa.me/50762417266?text=Hola,%20he%20alcanzado%20mi%20límite%20de%20conversiones%20en%20WebIA%20y%20quiero%20mejorar%20mi%20plan." 
+                     target="_blank" 
+                     rel="noreferrer"
+                     className="w-full flex items-center justify-center gap-3 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-1"
+                   >
+                     <MessageCircle className="w-5 h-5" /> Contactar Soporte (+507 62417266)
+                   </a>
+                 </div>
+                 <p className="text-xs text-gray-400">Atención inmediata disponible por WhatsApp</p>
+               </div>
+            </div>
+          )}
           
           {activeTab === "tutoriales" && (
             <div className="w-full max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 space-y-8 pb-12">
@@ -1543,6 +1813,8 @@ Quiero que me entregues:
                </p>
             </div>
           )}
+
+          {activeTab === "admin" && userProfile?.isAdmin && <AdminSection activeTab={activeTab} />}
 
           {/* New Professional Footer */}
           <footer className="w-full mt-20 pt-10 border-t border-gray-100 pb-10">
