@@ -7,6 +7,14 @@
       "properties": {
         "email": { "type": "string" },
         "plan": { "type": "string", "enum": ["free", "basico", "pro", "master"] },
+        "hosting": {
+          "type": "object",
+          "properties": {
+            "url": { "type": "string" },
+            "user": { "type": "string" },
+            "pass": { "type": "string" }
+          }
+        },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["email", "createdAt"]

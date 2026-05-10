@@ -41,7 +41,10 @@ export default function App() {
   const [generatedPrompt, setGeneratedPrompt] = useState("");
 
   // --- User Profile State ---
-  const [userProfile, setUserProfile] = useState<{ plan: string } | null>(null);
+  const [userProfile, setUserProfile] = useState<{ 
+    plan: string, 
+    hosting?: { url: string; user: string; pass: string } 
+  } | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -381,59 +384,67 @@ Quiero que me entregues:
   };
 
   const renderPromptGenerator = () => (
-    <div className="w-full max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 space-y-6 pt-2">
-      <header className="px-4 py-2">
-         <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight">Generador de Prompts Poderosos</h1>
-         <p className="text-gray-500 mt-2 text-lg">Escribe o pega una idea de negocio, y generaremos un prompt brutal para usar con IA y crear un sitio web profesional.</p>
+    <div className="w-full max-w-2xl mx-auto space-y-8 pb-20">
+      <header className="text-center space-y-3">
+        <div className="w-14 h-14 bg-[#fac900]/10 text-[#fac900] rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <Zap className="w-7 h-7" />
+        </div>
+        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Generador de Prompts PRO</h1>
+        <p className="text-slate-500 font-medium max-w-md mx-auto">
+          Describe tu idea y crearemos el prompt perfecto para que la IA genere tu sitio web profesional.
+        </p>
       </header>
-      
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 lg:p-8 space-y-6">
-        <label className="block text-sm font-bold text-gray-700">Explica tu idea de negocio o pega la reseña aquí:</label>
-        <textarea
-          value={userIdea}
-          onChange={(e) => setUserIdea(e.target.value)}
-          placeholder="Ej: Somos una pizzería artesanal italiana ubicada en Madrid, queremos atraer a más familias y destacar nuestra masa madre de fermentación lenta..."
-          className="w-full h-40 p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none font-medium text-gray-700"
-        ></textarea>
-        
+
+      <div className="bg-white rounded-[32px] shadow-2xl shadow-blue-500/5 p-6 md:p-10 border border-slate-100 space-y-6">
+        <div className="space-y-4">
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block ml-1">Tu idea de negocio o sitio web</label>
+          <textarea
+            value={userIdea}
+            onChange={(e) => setUserIdea(e.target.value)}
+            placeholder="Ej: Una landing page para una pizzería artesanal que ofrece delivery en Madrid, con un estilo rústico y moderno..."
+            className="w-full h-32 p-5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-[#fac900]/10 focus:border-[#fac900] outline-none transition-all placeholder:text-slate-300 font-medium text-slate-700 resize-none"
+          />
+        </div>
+
         <button
           onClick={handleGeneratePrompt}
-          disabled={!userIdea.trim()}
-          className="w-full bg-[#fac900] hover:bg-[#ffb000] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-gray-900 font-bold py-4 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 text-lg"
+          disabled={!userIdea || authLoading}
+          className="w-full py-4 bg-slate-900 hover:bg-black disabled:opacity-50 text-white rounded-2xl font-black transition-all flex justify-center items-center gap-3 shadow-xl active:scale-[0.98] text-base"
         >
-          <Terminal className="w-5 h-5" />
-          Generar Prompt Poderoso
+          {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
+          Generar Prompt Optimizado
         </button>
 
-        {generatedPrompt && (
-          <div className="pt-6 border-t border-gray-100 space-y-4 animate-in fade-in">
-            <h3 className="text-xl font-bold text-gray-900">Tu Prompt Generado:</h3>
-            <div className="relative">
-              <textarea
-                readOnly
-                value={generatedPrompt}
-                className="w-full h-64 p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono text-gray-700 focus:outline-none resize-none"
-              ></textarea>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <button
-                onClick={copyPrompt}
-                className="flex-1 bg-white hover:bg-gray-50 text-gray-900 border border-gray-200 py-3 rounded-xl font-bold transition-all shadow-sm flex justify-center items-center gap-2"
-              >
-                <FileArchive className="w-4 h-4" />
-                Copiar Prompt
-              </button>
-              <button
-                onClick={downloadPrompt}
-                className="flex-1 bg-gray-900 hover:bg-black text-white py-3 rounded-xl font-bold transition-all shadow-md flex justify-center items-center gap-2"
-              >
-                <Globe className="w-4 h-4" />
-                Descargar .txt
-              </button>
-            </div>
-          </div>
-        )}
+        <AnimatePresence>
+          {generatedPrompt && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="pt-6 border-t border-slate-50"
+            >
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6 flex flex-col items-center text-center space-y-4">
+                <div className="w-12 h-12 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                  <CheckCircle className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-bold text-slate-900">¡Prompt Generado!</h3>
+                  <p className="text-slate-500 text-xs font-medium">El prompt ha sido optimizado con ingeniería de instrucciones profesional.</p>
+                </div>
+                
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(generatedPrompt);
+                    alert("¡Prompt copiado al portapapeles!");
+                  }}
+                  className="w-full mt-2 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[.98]"
+                >
+                  <Copy className="w-5 h-5" />
+                  Copiar Prompt para la IA
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -952,29 +963,46 @@ Quiero que me entregues:
            <Server className="w-6 h-6 text-blue-600 shrink-0" />
            <h3 className="text-lg sm:text-xl font-bold text-gray-900">Tus Datos de Acceso cPanel</h3>
          </div>
-         <div className="space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white px-4 py-3 border border-blue-100 rounded-2xl gap-3 shadow-sm">
-               <span className="text-sm font-medium text-gray-500 w-24 shrink-0">URL:</span>
-               <span className="font-mono text-xs sm:text-sm text-blue-700 break-all">https://misitiowebpro.com/cpanel</span>
-               <a href="https://misitiowebpro.com/cpanel" target="_blank" rel="noreferrer" className="p-2 bg-blue-50 hover:bg-blue-100 rounded-xl text-blue-700 transition flex-shrink-0 self-end sm:self-auto" title="Abrir en nueva pestaña">
-                 <ExternalLink className="w-4 h-4"/>
-               </a>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white px-4 py-3 border border-blue-100 rounded-2xl gap-3 shadow-sm">
-               <span className="text-sm font-medium text-gray-500 w-24 shrink-0">Usuario:</span>
-               <span className="font-mono text-xs sm:text-sm text-gray-900 break-all">misitiowebpro</span>
-               <button onClick={() => navigator.clipboard.writeText("misitiowebpro")} className="p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-xl text-gray-600 transition flex-shrink-0 self-end sm:self-auto" title="Copiar usuario">
-                 <Copy className="w-4 h-4"/>
-               </button>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white px-4 py-3 border border-blue-100 rounded-2xl gap-3 shadow-sm">
-               <span className="text-sm font-medium text-gray-500 w-24 shrink-0">Contraseña:</span>
-               <span className="font-mono text-xs sm:text-sm text-gray-900 break-all">DesplieguePRO2026**</span>
-               <button onClick={() => navigator.clipboard.writeText("DesplieguePRO2026**")} className="p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-xl text-gray-600 transition flex-shrink-0 self-end sm:self-auto" title="Copiar contraseña">
-                 <Copy className="w-4 h-4"/>
-               </button>
-            </div>
-         </div>
+         
+         {userProfile?.hosting ? (
+           <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white px-4 py-3 border border-blue-100 rounded-2xl gap-3 shadow-sm">
+                 <span className="text-sm font-medium text-gray-500 w-24 shrink-0">URL:</span>
+                 <span className="font-mono text-xs sm:text-sm text-blue-700 break-all">{userProfile.hosting.url}</span>
+                 <a href={userProfile.hosting.url} target="_blank" rel="noreferrer" className="p-2 bg-blue-50 hover:bg-blue-100 rounded-xl text-blue-700 transition flex-shrink-0 self-end sm:self-auto" title="Abrir en nueva pestaña">
+                   <ExternalLink className="w-4 h-4"/>
+                 </a>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white px-4 py-3 border border-blue-100 rounded-2xl gap-3 shadow-sm">
+                 <span className="text-sm font-medium text-gray-500 w-24 shrink-0">Usuario:</span>
+                 <span className="font-mono text-xs sm:text-sm text-gray-900 break-all">{userProfile.hosting.user}</span>
+                 <button onClick={() => navigator.clipboard.writeText(userProfile.hosting!.user)} className="p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-xl text-gray-600 transition flex-shrink-0 self-end sm:self-auto" title="Copiar usuario">
+                   <Copy className="w-4 h-4"/>
+                 </button>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white px-4 py-3 border border-blue-100 rounded-2xl gap-3 shadow-sm">
+                 <span className="text-sm font-medium text-gray-500 w-24 shrink-0">Contraseña:</span>
+                 <span className="font-mono text-xs sm:text-sm text-gray-900 break-all">{userProfile.hosting.pass}</span>
+                 <button onClick={() => navigator.clipboard.writeText(userProfile.hosting!.pass)} className="p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-xl text-gray-600 transition flex-shrink-0 self-end sm:self-auto" title="Copiar contraseña">
+                   <Copy className="w-4 h-4"/>
+                 </button>
+              </div>
+           </div>
+         ) : (
+           <div className="bg-white p-6 border border-blue-100 rounded-2xl text-center space-y-3">
+              <div className="w-12 h-12 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto">
+                 <Lock className="w-6 h-6" />
+              </div>
+              <p className="text-gray-600 font-medium">Tus credenciales de hosting de prueba se están preparando.</p>
+              <p className="text-sm text-gray-400">Si acabas de registrarte, espera unos minutos o contacta a soporte por WhatsApp para que te asignemos un espacio privado.</p>
+              <button 
+                onClick={() => window.open('https://wa.me/50762417266?text=Hola,%20solicito%20mis%20credenciales%20de%20hosting%20de%20prueba%20para%20WebIA', '_blank')}
+                className="inline-flex items-center gap-2 text-blue-600 font-bold text-sm hover:underline"
+              >
+                Solicitar credenciales por WhatsApp <ExternalLink className="w-4 h-4" />
+              </button>
+           </div>
+         )}
       </div>
     </div>
   );
@@ -1516,6 +1544,21 @@ Quiero que me entregues:
             </div>
           )}
 
+          {/* New Professional Footer */}
+          <footer className="w-full mt-20 pt-10 border-t border-gray-100 pb-10">
+            <div className="flex flex-col items-center gap-6 text-center">
+              <div className="flex flex-wrap justify-center gap-4 sm:gap-10">
+                <a href="https://webiafacil.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-900 font-bold transition-colors">webiafacil.com</a>
+                <a href="https://tuweblatino.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-900 font-bold transition-colors">tuweblatino.com</a>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-black text-gray-300 uppercase tracking-widest">
+                  Creado con <span className="text-[#fac900]">webiafacil.com</span> y <span className="text-blue-500">tuweblatino.com</span>
+                </p>
+                <p className="text-[10px] text-gray-300 font-bold uppercase">© {new Date().getFullYear()} Todos los derechos reservados</p>
+              </div>
+            </div>
+          </footer>
         </main>
       </div>
     </div>
