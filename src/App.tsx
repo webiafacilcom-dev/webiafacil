@@ -85,6 +85,7 @@ function AdminSection({ activeTab }: { activeTab: string }) {
               <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Plan / Límite</th>
               <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Activación</th>
               <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Hosting (User/Pass)</th>
+              <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">DNS / Plan</th>
               <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">URL Hosting</th>
             </tr>
           </thead>
@@ -176,6 +177,37 @@ function AdminSection({ activeTab }: { activeTab: string }) {
                   </div>
                 </td>
                 <td className="p-4">
+                  <div className="flex flex-col gap-1">
+                    <input 
+                      type="text" 
+                      placeholder="Plan Hosting"
+                      value={u.hosting?.plan || ""} 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), plan: val } } : usr));
+                      }}
+                      onBlur={(e) => updateUserFieldValue(u.id, "hosting.plan", e.target.value)}
+                      className="text-[9px] bg-blue-50 text-blue-700 font-bold border-none rounded px-1.5 py-1 w-28 uppercase placeholder:text-blue-300"
+                    />
+                    <div className="grid grid-cols-2 gap-1 mt-1">
+                      {[1, 2, 3, 4].map(idx => (
+                        <input 
+                          key={idx}
+                          type="text" 
+                          placeholder={`DNS${idx}`}
+                          value={u.hosting?.[`dns${idx}`] || ""} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), [`dns${idx}`]: val } } : usr));
+                          }}
+                          onBlur={(e) => updateUserFieldValue(u.id, `hosting.dns${idx}`, e.target.value)}
+                          className="text-[8px] bg-gray-50 border border-gray-100 rounded px-1 py-0.5 w-14"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </td>
+                <td className="p-4">
                   <input 
                     type="text" 
                     placeholder="URL Hosting"
@@ -204,7 +236,7 @@ export default function App() {
   const [viewState, setViewState] = useState<"landing" | "auth" | "dashboard">("landing");
 
   // Layout State
-  const [activeTab, setActiveTab] = useState<"tutoriales" | "prompt-generator" | "converter" | "free-hosting" | "hosting" | "marketplace" | "afiliados" | "admin">("prompt-generator");
+  const [activeTab, setActiveTab] = useState<"tutoriales" | "prompt-generator" | "converter" | "free-hosting" | "hosting" | "marketplace" | "admin">("prompt-generator");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // --- Prompt Generator State ---
@@ -214,7 +246,16 @@ export default function App() {
   // --- User Profile State ---
   const [userProfile, setUserProfile] = useState<{ 
     plan: string;
-    hosting?: { url: string; user: string; pass: string };
+    hosting?: { 
+      url: string; 
+      user: string; 
+      pass: string;
+      plan?: string;
+      dns1?: string;
+      dns2?: string;
+      dns3?: string;
+      dns4?: string;
+    };
     isAdmin?: boolean;
     conversionCount?: number;
     maxConversions?: number;
@@ -1219,6 +1260,32 @@ Quiero que me entregues:
                    <Copy className="w-4 h-4"/>
                  </button>
               </div>
+
+              {/* Nuevos campos: Plan Hosting y DNS */}
+              {userProfile.hosting.plan && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-blue-50/50 px-4 py-3 border border-blue-100 rounded-2xl gap-3 shadow-sm">
+                   <span className="text-sm font-medium text-blue-600 w-24 shrink-0">Plan Hosting:</span>
+                   <span className="font-bold text-xs sm:text-sm text-blue-800">{userProfile.hosting.plan}</span>
+                   <div className="p-2 shrink-0"><CheckCircle className="w-4 h-4 text-blue-500" /></div>
+                </div>
+              )}
+
+              {(userProfile.hosting.dns1 || userProfile.hosting.dns2 || userProfile.hosting.dns3 || userProfile.hosting.dns4) && (
+                <div className="bg-white p-4 border border-blue-100 rounded-2xl space-y-3 shadow-sm">
+                   <p className="text-xs font-black text-gray-400 uppercase tracking-widest text-center">DNS Recomendados</p>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                     {[userProfile.hosting.dns1, userProfile.hosting.dns2, userProfile.hosting.dns3, userProfile.hosting.dns4].map((dns, idx) => dns && (
+                       <div key={idx} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-lg border border-gray-100">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">DNS{idx+1}</span>
+                          <span className="text-xs font-mono text-gray-700">{dns}</span>
+                          <button onClick={() => navigator.clipboard.writeText(dns)} className="text-gray-400 hover:text-blue-500 transition">
+                            <Copy className="w-3 h-3"/>
+                          </button>
+                       </div>
+                     ))}
+                   </div>
+                </div>
+              )}
            </div>
          ) : (
            <div className="bg-white p-6 border border-blue-100 rounded-2xl text-center space-y-3">
@@ -1580,7 +1647,7 @@ Quiero que me entregues:
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-colors ${activeTab === "free-hosting" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"}`}
                 >
                   <Server className={`w-5 h-5 ${activeTab === "free-hosting" ? "text-blue-600" : "text-gray-400"}`} />
-                  Lanzar Gratis
+                  cPanel Hosting
                 </button>
                 <button 
                   onClick={() => { setActiveTab("hosting"); setIsMobileMenuOpen(false); }}
@@ -1596,13 +1663,7 @@ Quiero que me entregues:
                   <ShoppingBag className={`w-5 h-5 ${activeTab === "marketplace" ? "text-blue-600" : "text-gray-400"}`} />
                   Marketplace <span className="ml-auto text-[10px] bg-blue-100 text-blue-700 py-0.5 px-2 rounded-full font-bold">Dominios</span>
                 </button>
-                <button 
-                  onClick={() => { setActiveTab("afiliados"); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-colors ${activeTab === "afiliados" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"}`}
-                >
-                  <Users className={`w-5 h-5 ${activeTab === "afiliados" ? "text-blue-600" : "text-gray-400"}`} />
-                  Afiliados <span className="ml-auto text-[10px] bg-gray-100 text-gray-500 py-0.5 px-2 rounded-full font-bold">Pronto</span>
-                </button>
+
                 {userProfile?.isAdmin && (
                   <button 
                     onClick={() => { setActiveTab("admin"); setIsMobileMenuOpen(false); }}
@@ -1735,8 +1796,8 @@ Quiero que me entregues:
           {activeTab === "free-hosting" && (
             <div className="w-full max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 space-y-6 pt-2">
               <header className="px-4 py-2">
-                 <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight">Lanzar Sitio Gratis</h1>
-                 <p className="text-gray-500 mt-2 text-lg">Prueba gratis y descubre lo fácil que es lanzar tu sitio web.</p>
+                 <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight">cPanel Hosting</h1>
+                 <p className="text-gray-500 mt-2 text-lg">Gestiona tu espacio de hosting y publica tu sitio web profesional.</p>
               </header>
               <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 lg:p-8">
                  {renderFreeHosting()}

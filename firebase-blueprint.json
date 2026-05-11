@@ -16,7 +16,12 @@
           "properties": {
             "url": { "type": "string" },
             "user": { "type": "string" },
-            "pass": { "type": "string" }
+            "pass": { "type": "string" },
+            "plan": { "type": "string" },
+            "dns1": { "type": "string" },
+            "dns2": { "type": "string" },
+            "dns3": { "type": "string" },
+            "dns4": { "type": "string" }
           }
         },
         "createdAt": { "type": "string", "format": "date-time" }
