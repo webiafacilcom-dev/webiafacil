@@ -46,6 +46,11 @@ service cloud.firestore {
         allow read, write: if isOwner(userId) || isAdmin();
       }
     }
+
+    match /tutorials/{tutorialId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
     
     // Temporary allow for connection test
     match /test/connection {

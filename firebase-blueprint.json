@@ -28,6 +28,30 @@
       },
       "required": ["email", "createdAt"]
     },
+    "Tutorial": {
+      "title": "Tutorial",
+      "description": "A video tutorial managed by administrators.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "description": { "type": "string" },
+        "links": { 
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": { "type": "string" },
+              "url": { "type": "string" }
+            }
+          }
+        },
+        "order": { "type": "number" },
+        "badge": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "videoUrl", "createdAt"]
+    },
     "WhatsAppLink": {
       "title": "WhatsAppLink",
       "description": "Saved WhatsApp shortened/tracked links.",
@@ -64,6 +88,10 @@
     "users/{userId}/websites/{siteId}": {
       "schema": { "$ref": "#/entities/WebsiteProject" },
       "description": "Stores generated websites belonging to the user."
+    },
+    "tutorials/{tutorialId}": {
+      "schema": { "$ref": "#/entities/Tutorial" },
+      "description": "Stores video tutorials managed by admins."
     }
   }
 }

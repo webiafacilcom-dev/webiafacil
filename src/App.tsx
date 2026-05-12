@@ -3,14 +3,14 @@ import {
   UploadCloud, FileType, Terminal, Loader2, CheckCircle, AlertTriangle, 
   Download, FileArchive, LogOut, ChevronRight, Copy, ExternalLink, Server,
   LayoutDashboard, HardDrive, ShoppingBag, Users, HeadphonesIcon, MessageCircle, ShieldCheck, CreditCard,
-  Menu, X, Lock, Mail, RefreshCw, Zap, Globe, Rocket, Key, ArrowRight
+  Menu, X, Lock, Mail, RefreshCw, Zap, Globe, Rocket, Key, ArrowRight, Plus, Trash2, Edit, Play, Link
 } from "lucide-react";
 import { 
   auth, registerUser, loginUser, resetPassword, signInWithGoogle, signOut, db, 
   handleFirestoreError, OperationType 
 } from "./firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc, setDoc, collection, getDocs, updateDoc, increment } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, getDocs, updateDoc, increment, addDoc, deleteDoc, query, orderBy } from "firebase/firestore";
 import { UploadBox } from "./components/UploadBox";
 import { ProgressSteps } from "./components/ProgressSteps";
 import { DownloadBox } from "./components/DownloadBox";
@@ -26,10 +26,25 @@ interface Job {
   downloadUrl?: string;
 }
 
+interface Tutorial {
+  id: string;
+  title: string;
+  videoUrl: string;
+  description?: string;
+  order?: number;
+  badge?: string;
+  links?: { label: string; url: string }[];
+  createdAt: any;
+}
+
 function AdminSection({ activeTab }: { activeTab: string }) {
+  const [adminView, setAdminView] = useState<"users" | "tutorials">("users");
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+  const [allTutorials, setAllTutorials] = useState<Tutorial[]>([]);
+  const [loadingTutorials, setLoadingTutorials] = useState(true);
 
+  // User fetching
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -42,8 +57,26 @@ function AdminSection({ activeTab }: { activeTab: string }) {
         setLoadingUsers(false);
       }
     };
-    if (activeTab === "admin") fetchUsers();
-  }, [activeTab]);
+    if (activeTab === "admin" && adminView === "users") fetchUsers();
+  }, [activeTab, adminView]);
+
+  // Tutorial fetching
+  useEffect(() => {
+    const fetchTutorials = async () => {
+      setLoadingTutorials(true);
+      try {
+        const q = query(collection(db, "tutorials"), orderBy("order", "asc"));
+        const querySnapshot = await getDocs(q);
+        const tutsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tutorial));
+        setAllTutorials(tutsData);
+      } catch (err) {
+        console.error("Error fetching tutorials", err);
+      } finally {
+        setLoadingTutorials(false);
+      }
+    };
+    if (activeTab === "admin" && adminView === "tutorials") fetchTutorials();
+  }, [activeTab, adminView]);
 
   const updateUserFieldValue = async (userId: string, field: string, value: any) => {
     try {
@@ -63,168 +96,407 @@ function AdminSection({ activeTab }: { activeTab: string }) {
     }
   };
 
-  if (loadingUsers) return <div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div>;
+  const [editingTutorial, setEditingTutorial] = useState<Partial<Tutorial> | null>(null);
+
+  const saveTutorial = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTutorial?.title || !editingTutorial?.videoUrl) {
+      alert("Título y URL de video son obligatorios");
+      return;
+    }
+
+    try {
+      const { id, ...data } = editingTutorial;
+      const finalData = {
+        ...data,
+        createdAt: data.createdAt || new Date(),
+        order: Number(data.order || 0)
+      };
+
+      if (id) {
+        await updateDoc(doc(db, "tutorials", id), finalData);
+        setAllTutorials(prev => prev.map(t => t.id === id ? { ...t, ...finalData } : t));
+      } else {
+        const docRef = await addDoc(collection(db, "tutorials"), finalData);
+        setAllTutorials(prev => [...prev, { id: docRef.id, ...finalData } as Tutorial]);
+      }
+      setEditingTutorial(null);
+    } catch (err) {
+      alert("Error al guardar tutorial");
+    }
+  };
+
+  const deleteTutorial = async (id: string) => {
+    if (!window.confirm("¿Estás seguro de eliminar este tutorial?")) return;
+    try {
+      await deleteDoc(doc(db, "tutorials", id));
+      setAllTutorials(prev => prev.filter(t => t.id !== id));
+    } catch (err) {
+      alert("Error al eliminar tutorial");
+    }
+  };
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-8 pb-20">
-      <header className="flex justify-between items-center">
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black text-gray-900">Panel de Administración</h1>
-          <p className="text-gray-500">Gestiona usuarios, planes y credenciales de hosting.</p>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Panel Administrativo</h1>
+          <p className="text-gray-500 font-medium">Control total sobre usuarios y contenido educativo.</p>
         </div>
-        <button onClick={() => window.location.reload()} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition">
-          <RefreshCw className="w-5 h-5" />
-        </button>
+        <div className="flex bg-gray-100 p-1 rounded-2xl">
+          <button 
+            onClick={() => setAdminView("users")}
+            className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${adminView === "users" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-900"}`}
+          >
+            Usuarios
+          </button>
+          <button 
+            onClick={() => setAdminView("tutorials")}
+            className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${adminView === "tutorials" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-900"}`}
+          >
+            Tutoriales
+          </button>
+        </div>
       </header>
 
-      <div className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Usuario / WhatsApp</th>
-              <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Plan / Límite</th>
-              <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Activación</th>
-              <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Hosting (User/Pass)</th>
-              <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">DNS / Plan</th>
-              <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">URL Hosting</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {allUsers.map((u) => (
-              <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
-                <td className="p-4">
-                  <div className="flex flex-col">
-                    <span className="font-bold text-gray-900">{u.email}</span>
-                    <div className="flex items-center gap-2 mt-1">
+      {adminView === "users" ? (
+        loadingUsers ? <div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div> : (
+          <div className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Usuario / WhatsApp</th>
+                  <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Plan / Límite</th>
+                  <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Activación</th>
+                  <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">Hosting (User/Pass)</th>
+                  <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">DNS / Plan</th>
+                  <th className="p-4 text-xs font-black text-gray-400 uppercase tracking-widest">URL Hosting</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {allUsers.map((u) => (
+                  <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="p-4">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-gray-900">{u.email}</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <input 
+                            type="text" 
+                            placeholder="WhatsApp"
+                            value={u.whatsapp || ""} 
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, whatsapp: val } : usr));
+                            }}
+                            onBlur={(e) => updateUserFieldValue(u.id, "whatsapp", e.target.value)}
+                            className="text-xs bg-gray-100 border-none rounded px-2 py-1 w-32 focus:ring-1 focus:ring-blue-500"
+                          />
+                          {u.whatsapp && (
+                            <a href={`https://wa.me/${u.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-emerald-500 hover:text-emerald-600">
+                              <MessageCircle className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex flex-col gap-2">
+                        <select 
+                          value={u.plan || "free"} 
+                          onChange={(e) => updateUserFieldValue(u.id, "plan", e.target.value)}
+                          className="text-xs font-bold bg-blue-50 text-blue-700 border-none rounded px-2 py-1 uppercase"
+                        >
+                          <option value="free">Free</option>
+                          <option value="basico">Basico</option>
+                          <option value="pro">Pro</option>
+                          <option value="master">Master</option>
+                        </select>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-gray-400 uppercase font-black">Límite:</span>
+                          <input 
+                            type="number" 
+                            value={u.maxConversions || 0} 
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, maxConversions: val } : usr));
+                            }}
+                            onBlur={(e) => updateUserFieldValue(u.id, "maxConversions", parseInt(e.target.value))}
+                            className="w-12 text-[10px] bg-gray-100 border-none rounded px-1 py-0.5 text-center font-bold"
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4">
                       <input 
-                        type="text" 
-                        placeholder="WhatsApp"
-                        value={u.whatsapp || ""} 
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, whatsapp: val } : usr));
-                        }}
-                        onBlur={(e) => updateUserFieldValue(u.id, "whatsapp", e.target.value)}
-                        className="text-xs bg-gray-100 border-none rounded px-2 py-1 w-32 focus:ring-1 focus:ring-blue-500"
+                        type="date" 
+                        value={u.activationDate ? u.activationDate.split('T')[0] : ""} 
+                        onChange={(e) => updateUserFieldValue(u.id, "activationDate", e.target.value)}
+                        className="text-xs bg-gray-100 border-none rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
                       />
-                      {u.whatsapp && (
-                        <a href={`https://wa.me/${u.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-emerald-500 hover:text-emerald-600">
-                          <MessageCircle className="w-3 h-3" />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                </td>
-                <td className="p-4">
-                  <div className="flex flex-col gap-2">
-                    <select 
-                      value={u.plan || "free"} 
-                      onChange={(e) => updateUserFieldValue(u.id, "plan", e.target.value)}
-                      className="text-xs font-bold bg-blue-50 text-blue-700 border-none rounded px-2 py-1 uppercase"
-                    >
-                      <option value="free">Free</option>
-                      <option value="basico">Basico</option>
-                      <option value="pro">Pro</option>
-                      <option value="master">Master</option>
-                    </select>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-gray-400 uppercase font-black">Límite:</span>
-                      <input 
-                        type="number" 
-                        value={u.maxConversions || 0} 
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value);
-                          setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, maxConversions: val } : usr));
-                        }}
-                        onBlur={(e) => updateUserFieldValue(u.id, "maxConversions", parseInt(e.target.value))}
-                        className="w-12 text-[10px] bg-gray-100 border-none rounded px-1 py-0.5 text-center font-bold"
-                      />
-                    </div>
-                  </div>
-                </td>
-                <td className="p-4">
-                  <input 
-                    type="date" 
-                    value={u.activationDate ? u.activationDate.split('T')[0] : ""} 
-                    onChange={(e) => updateUserFieldValue(u.id, "activationDate", e.target.value)}
-                    className="text-xs bg-gray-100 border-none rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
-                  />
-                </td>
-                <td className="p-4">
-                  <div className="flex flex-col gap-1">
-                    <input 
-                      type="text" 
-                      placeholder="User"
-                      value={u.hosting?.user || ""} 
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), user: val } } : usr));
-                      }}
-                      onBlur={(e) => updateUserFieldValue(u.id, "hosting.user", e.target.value)}
-                      className="text-[10px] bg-gray-100 border-none rounded px-2 py-1 w-24"
-                    />
-                    <input 
-                      type="text" 
-                      placeholder="Pass"
-                      value={u.hosting?.pass || ""} 
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), pass: val } } : usr));
-                      }}
-                      onBlur={(e) => updateUserFieldValue(u.id, "hosting.pass", e.target.value)}
-                      className="text-[10px] bg-gray-100 border-none rounded px-2 py-1 w-24"
-                    />
-                  </div>
-                </td>
-                <td className="p-4">
-                  <div className="flex flex-col gap-1">
-                    <input 
-                      type="text" 
-                      placeholder="Plan Hosting"
-                      value={u.hosting?.plan || ""} 
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), plan: val } } : usr));
-                      }}
-                      onBlur={(e) => updateUserFieldValue(u.id, "hosting.plan", e.target.value)}
-                      className="text-[9px] bg-blue-50 text-blue-700 font-bold border-none rounded px-1.5 py-1 w-28 uppercase placeholder:text-blue-300"
-                    />
-                    <div className="grid grid-cols-2 gap-1 mt-1">
-                      {[1, 2, 3, 4].map(idx => (
+                    </td>
+                    <td className="p-4">
+                      <div className="flex flex-col gap-1">
                         <input 
-                          key={idx}
                           type="text" 
-                          placeholder={`DNS${idx}`}
-                          value={u.hosting?.[`dns${idx}`] || ""} 
+                          placeholder="User"
+                          value={u.hosting?.user || ""} 
                           onChange={(e) => {
                             const val = e.target.value;
-                            setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), [`dns${idx}`]: val } } : usr));
+                            setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), user: val } } : usr));
                           }}
-                          onBlur={(e) => updateUserFieldValue(u.id, `hosting.dns${idx}`, e.target.value)}
-                          className="text-[8px] bg-gray-50 border border-gray-100 rounded px-1 py-0.5 w-14"
+                          onBlur={(e) => updateUserFieldValue(u.id, "hosting.user", e.target.value)}
+                          className="text-[10px] bg-gray-100 border-none rounded px-2 py-1 w-24"
                         />
-                      ))}
+                        <input 
+                          type="text" 
+                          placeholder="Pass"
+                          value={u.hosting?.pass || ""} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), pass: val } } : usr));
+                          }}
+                          onBlur={(e) => updateUserFieldValue(u.id, "hosting.pass", e.target.value)}
+                          className="text-[10px] bg-gray-100 border-none rounded px-2 py-1 w-24"
+                        />
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex flex-col gap-1">
+                        <input 
+                          type="text" 
+                          placeholder="Plan Hosting"
+                          value={u.hosting?.plan || ""} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), plan: val } } : usr));
+                          }}
+                          onBlur={(e) => updateUserFieldValue(u.id, "hosting.plan", e.target.value)}
+                          className="text-[9px] bg-blue-50 text-blue-700 font-bold border-none rounded px-1.5 py-1 w-28 uppercase placeholder:text-blue-300"
+                        />
+                        <div className="grid grid-cols-2 gap-1 mt-1">
+                          {[1, 2, 3, 4].map(idx => (
+                            <input 
+                              key={idx}
+                              type="text" 
+                              placeholder={`DNS${idx}`}
+                              value={u.hosting?.[`dns${idx}`] || ""} 
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), [`dns${idx}`]: val } } : usr));
+                              }}
+                              onBlur={(e) => updateUserFieldValue(u.id, `hosting.dns${idx}`, e.target.value)}
+                              className="text-[8px] bg-gray-50 border border-gray-100 rounded px-1 py-0.5 w-14"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <input 
+                        type="text" 
+                        placeholder="URL Hosting"
+                        value={u.hosting?.url || ""} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), url: val } } : usr));
+                        }}
+                        onBlur={(e) => updateUserFieldValue(u.id, "hosting.url", e.target.value)}
+                        className="text-[10px] bg-gray-100 border-none rounded px-2 py-1 w-full min-w-[150px]"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold text-gray-900">Gestión de Tutoriales</h2>
+            <button 
+              onClick={() => setEditingTutorial({ order: allTutorials.length + 1, links: [] })}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition"
+            >
+              <Plus className="w-4 h-4" /> Agregar Tutorial
+            </button>
+          </div>
+
+          <AnimatePresence>
+            {editingTutorial && (
+              <motion.div 
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="bg-white p-6 rounded-[32px] border border-blue-100 shadow-xl space-y-6"
+              >
+                <form onSubmit={saveTutorial} className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-black text-gray-400 uppercase mb-1 block">Título del Video</label>
+                      <input 
+                        required
+                        type="text" 
+                        value={editingTutorial.title || ""} 
+                        onChange={e => setEditingTutorial({...editingTutorial, title: e.target.value})}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ej: Cómo subir tu sitio a cPanel"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-black text-gray-400 uppercase mb-1 block">URL de YouTube (ID o URL completa)</label>
+                      <input 
+                        required
+                        type="text" 
+                        value={editingTutorial.videoUrl || ""} 
+                        onChange={e => setEditingTutorial({...editingTutorial, videoUrl: e.target.value})}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ej: https://www.youtube.com/watch?v=..."
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-black text-gray-400 uppercase mb-1 block">Orden / Badge</label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="number" 
+                          value={editingTutorial.order || 0} 
+                          onChange={e => setEditingTutorial({...editingTutorial, order: parseInt(e.target.value)})}
+                          className="w-20 bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <input 
+                          type="text" 
+                          value={editingTutorial.badge || ""} 
+                          onChange={e => setEditingTutorial({...editingTutorial, badge: e.target.value})}
+                          className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Ej: Nuevo, Básico, Pro..."
+                        />
+                      </div>
                     </div>
                   </div>
-                </td>
-                <td className="p-4">
-                  <input 
-                    type="text" 
-                    placeholder="URL Hosting"
-                    value={u.hosting?.url || ""} 
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setAllUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, hosting: { ...(usr.hosting || {}), url: val } } : usr));
-                    }}
-                    onBlur={(e) => updateUserFieldValue(u.id, "hosting.url", e.target.value)}
-                    className="text-[10px] bg-gray-100 border-none rounded px-2 py-1 w-full min-w-[150px]"
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-black text-gray-400 uppercase mb-1 block">Descripción / Texto</label>
+                      <textarea 
+                        value={editingTutorial.description || ""} 
+                        onChange={e => setEditingTutorial({...editingTutorial, description: e.target.value})}
+                        className="w-full h-32 bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                        placeholder="Describe de qué trata el video..."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-gray-400 uppercase mb-1 block">Enlaces Útiles</label>
+                      {(editingTutorial.links || []).map((link, idx) => (
+                        <div key={idx} className="flex gap-2">
+                          <input 
+                            placeholder="Etiqueta" 
+                            value={link.label} 
+                            onChange={e => {
+                              const newLinks = [...(editingTutorial.links || [])];
+                              newLinks[idx].label = e.target.value;
+                              setEditingTutorial({...editingTutorial, links: newLinks});
+                            }}
+                            className="w-1/3 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-xs"
+                          />
+                          <input 
+                            placeholder="URL" 
+                            value={link.url} 
+                            onChange={e => {
+                              const newLinks = [...(editingTutorial.links || [])];
+                              newLinks[idx].url = e.target.value;
+                              setEditingTutorial({...editingTutorial, links: newLinks});
+                            }}
+                            className="flex-1 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-xs"
+                          />
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              const newLinks = (editingTutorial.links || []).filter((_, i) => i !== idx);
+                              setEditingTutorial({...editingTutorial, links: newLinks});
+                            }}
+                            className="p-1.5 text-red-400 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <button 
+                        type="button"
+                        onClick={() => setEditingTutorial({...editingTutorial, links: [...(editingTutorial.links || []), { label: "", url: "" }]})}
+                        className="text-xs text-blue-600 font-bold flex items-center gap-1 hover:underline"
+                      >
+                        <Plus className="w-3 h-3" /> Agregar enlace
+                      </button>
+                    </div>
+                  </div>
+                  <div className="md:col-span-2 flex justify-end gap-3 pt-4 border-t border-gray-50">
+                    <button 
+                      type="button"
+                      onClick={() => setEditingTutorial(null)}
+                      className="px-6 py-2.5 rounded-xl font-bold text-sm text-gray-500 hover:bg-gray-100 transition"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="submit"
+                      className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition shadow-lg shadow-blue-500/20"
+                    >
+                      {editingTutorial.id ? "Actualizar Tutorial" : "Crear Tutorial"}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {loadingTutorials ? <div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div> : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {allTutorials.map(tut => (
+                <div key={tut.id} className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm flex gap-4 h-full">
+                  <div className="w-32 h-20 bg-gray-100 rounded-2xl shrink-0 overflow-hidden relative group">
+                    <img 
+                      src={`https://img.youtube.com/vi/${tut.videoUrl.includes('v=') ? tut.videoUrl.split('v=')[1].split('&')[0] : tut.videoUrl.split('/').pop()}/mqdefault.jpg`} 
+                      className="w-full h-full object-cover"
+                      alt=""
+                    />
+                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Play className="w-6 h-6 text-white fill-white" />
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                           <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">#{tut.order}</span>
+                           {tut.badge && <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full font-bold uppercase">{tut.badge}</span>}
+                        </div>
+                        <h3 className="font-bold text-gray-900 truncate">{tut.title}</h3>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={() => setEditingTutorial(tut)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition">
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => deleteTutorial(tut.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 line-clamp-2 mt-1 mb-2">{tut.description || "Sin descripción"}</p>
+                    <div className="mt-auto flex gap-2">
+                       <span className="text-[10px] text-gray-400 font-medium">{(tut.links || []).length} enlaces</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {allTutorials.length === 0 && (
+                <div className="md:col-span-2 text-center p-20 bg-gray-50 rounded-[32px] border border-dashed border-gray-200">
+                  <Play className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 font-medium">No hay tutoriales registrados aún.</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -238,6 +510,27 @@ export default function App() {
   // Layout State
   const [activeTab, setActiveTab] = useState<"tutoriales" | "prompt-generator" | "converter" | "free-hosting" | "hosting" | "marketplace" | "admin">("prompt-generator");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // --- Tutorials Data ---
+  const [tutorials, setTutorials] = useState<Tutorial[]>([]);
+  const [loadingTutorials, setLoadingTutorials] = useState(false);
+
+  useEffect(() => {
+    const fetchTutorials = async () => {
+      setLoadingTutorials(true);
+      try {
+        const q = query(collection(db, "tutorials"), orderBy("order", "asc"));
+        const querySnapshot = await getDocs(q);
+        const tutsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tutorial));
+        setTutorials(tutsData);
+      } catch (err) {
+        console.error("Error fetching tutorials", err);
+      } finally {
+        setLoadingTutorials(false);
+      }
+    };
+    if (activeTab === "tutoriales") fetchTutorials();
+  }, [activeTab]);
 
   // --- Prompt Generator State ---
   const [userIdea, setUserIdea] = useState("");
@@ -477,9 +770,14 @@ export default function App() {
   };
 
   const startConversion = async () => {
-    if (!file) return;
-    if (userProfile && userProfile.conversionCount! >= userProfile.maxConversions!) {
-      return; // Handled by block UI
+    console.log("Iniciando conversión...", { file, userProfile });
+    if (!file) {
+      console.error("No hay archivo seleccionado");
+      return;
+    }
+    if (userProfile && !userProfile.isAdmin && userProfile.conversionCount! >= userProfile.maxConversions!) {
+      console.warn("Límite de conversiones alcanzado para este usuario");
+      return; 
     }
     setUploadError(null);
     const formData = new FormData();
@@ -490,16 +788,20 @@ export default function App() {
       formData.append("uid", user ? user.uid : "");
       formData.append("plan", userProfile ? userProfile.plan : "free");
       
+      console.log("Enviando petición a /api/convert...");
       const res = await fetch("/api/convert", { method: "POST", body: formData });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({ error: `Error del servidor: ${res.status}` }));
+        console.error("Error en la respuesta del servidor:", errData);
         throw new Error(errData.error || "No se pudo iniciar el proceso");
       }
       const data = await res.json();
+      console.log("Job ID recibido:", data.jobId);
       setJobId(data.jobId);
 
       // Increment conversion count after successful upload
       if (user) {
+        console.log("Incrementando contador de conversiones para:", user.uid);
         try {
           const userRef = doc(db, "users", user.uid);
           await updateDoc(userRef, {
@@ -507,10 +809,11 @@ export default function App() {
           });
           setUserProfile(prev => prev ? { ...prev, conversionCount: (prev.conversionCount || 0) + 1 } : null);
         } catch (err) {
-          console.error("Error incrementing conversion", err);
+          console.error("Error incrementing conversion in Firestore", err);
         }
       }
     } catch (err: any) {
+      console.error("Error crítico en startConversion:", err);
       setUploadError(err.message || "Uh oh! Hubo un problema al subir el archivo.");
     }
   };
@@ -524,7 +827,7 @@ export default function App() {
   }
 
   const handleGeneratePrompt = async () => {
-    if (userProfile && userProfile.conversionCount! >= userProfile.maxConversions!) {
+    if (userProfile && !userProfile.isAdmin && userProfile.conversionCount! >= userProfile.maxConversions!) {
       return; // Handled by block UI
     }
 
@@ -1750,42 +2053,70 @@ Quiero que me entregues:
             <div className="w-full max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 space-y-8 pb-12">
                <header className="px-4 py-2 border-b border-gray-100 pb-8">
                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 font-medium text-xs mb-4 border border-blue-100">
-                    Empieza aquí
+                    Centro de Aprendizaje
                  </div>
                  <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight">Tutoriales Prácticos</h1>
-                 <p className="text-gray-500 mt-2 text-lg max-w-2xl">Aprende paso a paso cómo crear tu sitio web fácil, montarlo en cPanel o usar servicios como Vercel y Render (aunque estos últimos pueden resultar más caros a futuro).</p>
+                 <p className="text-gray-500 mt-2 text-lg max-w-2xl">Aprende paso a paso cómo crear tu sitio web fácil, montarlo en cPanel y configurar todos los servicios para tu presencia online.</p>
                </header>
                
-               <div className="grid md:grid-cols-2 gap-8 px-4">
-                  {/* Tutorial 1 */}
-                  <div className="bg-white border text-left border-gray-100 shadow-sm rounded-3xl overflow-hidden hover:border-gray-300 transition-colors">
-                     <div className="aspect-video bg-gray-100 relative">
-                        <iframe 
-                          className="w-full h-full absolute inset-0"
-                          src="https://www.youtube.com/embed/n3H5U1E-k4o" 
-                          title="Crear y subir a cPanel" 
-                          frameBorder="0" 
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                          allowFullScreen>
-                        </iframe>
-                     </div>
-                     <div className="p-6">
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">Crear Sitio con IA y subirlo a cPanel</h3>
-                        <p className="text-gray-500 text-sm">La forma más económica y con control absoluto. Ideal para emprendedores y pymes que quieren dominios y bases de datos propias.</p>
-                     </div>
-                  </div>
-
-                  {/* Tutorial 2 */}
-                  <div className="bg-white border text-left border-gray-100 shadow-sm rounded-3xl overflow-hidden hover:border-gray-300 transition-colors">
-                     <div className="aspect-video bg-gray-100 relative flex items-center justify-center">
-                        <span className="text-gray-400 font-medium">Video en preparación...</span>
-                     </div>
-                     <div className="p-6">
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">Alternativas Clould: Vercel y Render</h3>
-                        <p className="text-gray-500 text-sm">Aprende cómo usar plataformas en la nube. Toma en cuenta que escalar en estas plataformas suele tener un costo más elevado.</p>
-                     </div>
-                  </div>
-               </div>
+               {loadingTutorials ? (
+                 <div className="flex flex-col items-center justify-center py-20 animate-pulse">
+                   <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-4" />
+                   <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Cargando material educativo...</p>
+                 </div>
+               ) : (
+                 <div className="grid md:grid-cols-2 gap-8 px-4">
+                    {tutorials.map((tut) => (
+                      <div key={tut.id} className="bg-white border text-left border-gray-100 shadow-sm rounded-3xl overflow-hidden hover:border-blue-200 transition-all hover:shadow-xl hover:-translate-y-1">
+                         <div className="aspect-video bg-gray-100 relative shadow-inner">
+                            <iframe 
+                              className="w-full h-full absolute inset-0"
+                              src={`https://www.youtube.com/embed/${tut.videoUrl.includes('v=') ? tut.videoUrl.split('v=')[1].split('&')[0] : tut.videoUrl.split('/').pop()}`} 
+                              title={tut.title}
+                              frameBorder="0" 
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                              allowFullScreen>
+                            </iframe>
+                         </div>
+                         <div className="p-6 space-y-3">
+                            <div className="flex items-center gap-2">
+                               {tut.badge && <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">{tut.badge}</span>}
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900 leading-tight">{tut.title}</h3>
+                            <p className="text-gray-500 text-sm leading-relaxed">{tut.description}</p>
+                            
+                            {(tut.links && tut.links.length > 0) && (
+                              <div className="pt-4 border-t border-gray-50 space-y-2">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Enlaces y recursos:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {tut.links.map((link, lidx) => (
+                                    <a 
+                                      key={lidx} 
+                                      href={link.url} 
+                                      target="_blank" 
+                                      rel="noreferrer" 
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-blue-50 text-gray-600 hover:text-blue-600 rounded-xl text-xs font-bold transition-colors border border-gray-100"
+                                    >
+                                      <Link className="w-3 h-3" />
+                                      {link.label}
+                                    </a>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                         </div>
+                      </div>
+                    ))}
+                    
+                    {tutorials.length === 0 && (
+                       <div className="md:col-span-2 text-center py-20 bg-gray-50 rounded-[32px] border-2 border-dashed border-gray-200">
+                          <Play className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+                          <h3 className="text-xl font-bold text-gray-400">Próximamente más contenido</h3>
+                          <p className="text-gray-400 text-sm mt-2">Estamos preparando los mejores tutoriales para ti.</p>
+                       </div>
+                    )}
+                 </div>
+               )}
             </div>
           )}
 

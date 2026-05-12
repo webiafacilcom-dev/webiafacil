@@ -48,11 +48,14 @@ app.get("/api/health", (req, res) => {
 });
 
 app.post("/api/convert", upload.single("projectZip"), async (req, res) => {
+  console.log("Recibida petición /api/convert");
   if (!req.file) {
+    console.warn("Intento de conversión sin archivo");
     return res.status(400).json({ error: "No se subió ningún archivo ZIP." });
   }
 
   const jobId = uuidv4();
+  console.log(`Iniciando trabajo ${jobId} para el archivo ${req.file.originalname}`);
   const workDir = path.join(TEMP_DIR, jobId);
   await fs.ensureDir(workDir);
 
@@ -73,7 +76,14 @@ app.post("/api/convert", upload.single("projectZip"), async (req, res) => {
       jobs.set(jobId, currentJob);
     }
   }).catch(err => {
-    console.error("Critical conversion error:", err);
+    console.error(`Error crítico en conversión de trabajo ${jobId}:`, err);
+    const failedJob = jobs.get(jobId);
+    if (failedJob) {
+       failedJob.status = "error";
+       failedJob.error = err.message;
+       failedJob.logs.push(`ERROR CRÍTICO: ${err.message}`);
+       jobs.set(jobId, failedJob);
+    }
   });
 
   res.json({ jobId });

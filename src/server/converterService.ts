@@ -132,20 +132,35 @@ export async function convertProject(
     log("Analizando estructura del proyecto...");
     const type = await detectProjectType(projectRoot);
     log(`Tipo de proyecto detectado: ${type.toUpperCase()}`);
+    log(`Directorio raíz: ${projectRoot}`);
 
     let distPath = projectRoot;
 
     if (type === "react-vite") {
       updateJob({ status: "installing" });
-      log("Instalando dependencias (npm install)...");
-      await runCommand("npm", ["install", "--no-audit", "--no-fund"], projectRoot, log);
+      log("Instalando dependencias (npm install)... (esto puede tardar unos minutos)");
+      try {
+        await runCommand("npm", ["install", "--no-audit", "--no-fund"], projectRoot, log);
+      } catch (err: any) {
+        log(`Advertencia npm install: ${err.message}`);
+        log("Intentando continuar con el build a pesar del error de instalación...");
+      }
 
       updateJob({ status: "building" });
       log("Compilando proyecto para producción...");
-      // We force base=./ to ensure relative paths work in cPanel subfolders
-      await runCommand("npm", ["run", "build", "--", "--base=./"], projectRoot, log);
+      try {
+        // We force base=./ to ensure relative paths work in cPanel subfolders
+        await runCommand("npm", ["run", "build", "--", "--base=./"], projectRoot, log);
+      } catch (err: any) {
+        log(`Error crítico en build: ${err.message}`);
+        throw err;
+      }
       
       distPath = path.join(projectRoot, "dist");
+      if (!(await fs.pathExists(distPath))) {
+        log("Error: No se encontró la carpeta 'dist' después del build.");
+        throw new Error("No se encontró la carpeta 'dist' tras la compilación.");
+      }
     } else if (type === "precompiled") {
       const folders = ["dist", "build", "out"];
       for (const f of folders) {
